@@ -120,14 +120,14 @@ public class LogInfoManager {
                 while ((line = mReader.readLine()) != null && isRunning) {
                     LogLine logLine = LogLine.newLogLine(line, false);
                     if (!mReader.readyToRecord()) {
-                        if (logLine.getProcessId() == mPid) {
+                        if (logLine.getProcessId() == mPid || (logLine.getTag() != null && logLine.getTag().contains("jsLog"))) {
                             initialLines.add(logLine);
                         }
                         if (initialLines.size() > maxLines) {
                             initialLines.removeFirst();
                         }
                     } else if (!initialLines.isEmpty()) {
-                        if (logLine.getProcessId() == mPid) {
+                        if (logLine.getProcessId() == mPid || (logLine.getTag() != null && logLine.getTag().contains("jsLog"))) {
                             initialLines.add(logLine);
                         }
                         Message message = Message.obtain();
@@ -137,7 +137,7 @@ public class LogInfoManager {
                         initialLines.clear();
                     } else {
                         // just proceed as normal
-                        if (logLine.getProcessId() == mPid) {
+                        if (logLine.getProcessId() == mPid || (logLine.getTag() != null && logLine.getTag().contains("jsLog"))) {
                             Message message = Message.obtain();
                             message.what = MESSAGE_PUBLISH_LOG;
                             message.obj = Collections.singletonList(logLine);

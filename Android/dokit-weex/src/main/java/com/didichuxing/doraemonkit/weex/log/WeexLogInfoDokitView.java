@@ -61,7 +61,7 @@ public class WeexLogInfoDokitView extends LogInfoDokitView {
         //过滤出weex日志
         List<LogLine> newLines = new ArrayList<>();
         for (LogLine logLine : logLines) {
-            if (logLine.getTag().contains(WEEX_TAG)) {
+            if (logLine.getTag().contains(WEEX_TAG) || logLine.getTag().contains("jsLog")) {
                 newLines.add(logLine);
             }
         }
