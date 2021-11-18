@@ -1,0 +1,100 @@
+import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency
+import org.json.JSONObject
+
+//本地或者滴滴内部仓库打包脚本(插件需要单独区分)
+apply plugin: 'maven-publish'
+
+Properties properties = new Properties()
+properties.load(project.rootProject.file('local.properties').newDataInputStream())
+
+def DOKIT_VERSION = rootProject.ext.publish_config["version"]
+def GROUP_ID = properties.getProperty('GROUP', "")
+def USERNAME = properties.getProperty('NEXUS_USERNAME', "")
+def PASSWORD = properties.getProperty('NEXUS_PASSWORD', "")
+def SNAPSHOT_REPOSITORY_URL = properties.getProperty('SNAPSHOT_REPOSITORY_URL', "")
+def RELEASE_REPOSITORY_URL = properties.getProperty('RELEASE_REPOSITORY_URL', "")
+
+
+//读取module和ARTIFACT_ID的映射文件
+def MODULE_JSONOBJECT = new JSONObject(new File("${rootProject.rootDir}/dokit_module.json").text)
+
+task generateSourcesJar(type: Jar) {
+    classifier 'sources'
+    if (project.ARTIFACT_ID == "dokitx-plugin") {
+        from project.kotlin.sourceSets.main.kotlin.source
+    } else {
+        from project.android.sourceSets.main.java.source
+    }
+
+}
+
+if (project.ARTIFACT_ID == "dokitx-plugin") {
+    task packageJavadoc(type: Jar) {
+        classifier = 'javadoc'
+        from javadoc
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                // The coordinates of the library, being set from variables that
+                // we'll set up in a moment
+                groupId GROUP_ID
+                artifactId project.ARTIFACT_ID
+                version DOKIT_VERSION
+
+//                afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
+
+                artifact generateSourcesJar
+                // Two artifacts, the `aar` and the sources
+                if (project.ARTIFACT_ID == "dokitx-plugin") {
+                    artifact packageJavadoc
+                    artifact("$buildDir/libs/${project.getName()}.jar")
+                } else {
+                    artifact("$buildDir/outputs/aar/${project.getName()}-release.aar")
+                }
+
+                // Self-explanatory metadata for the most part
+                pom.withXml {
+                    // A slightly hacky fix so that your POM will include any transitive dependencies
+                    // that your library builds upon
+                    def dependenciesNode = asNode().appendNode('dependencies')
+                    project.configurations.implementation.allDependencies.each { dependency ->
+                        if (!dependency.name.isEmpty() && dependency.name != "unspecified") {
+                            def dependencyNode = dependenciesNode.appendNode('dependency')
+                            if (dependency instanceof DefaultProjectDependency) {
+                                //统一project 前缀
+                                if (dependency.name.startsWith("dokit")) {
+                                    dependencyNode.appendNode('groupId', GROUP_ID)
+                                    dependencyNode.appendNode('artifactId', MODULE_JSONOBJECT.getString(dependency.name))
+                                    dependencyNode.appendNode('version', DOKIT_VERSION)
+                                }
+                            } else {
+                                dependencyNode.appendNode('groupId', dependency.group)
+                                dependencyNode.appendNode('artifactId', dependency.name)
+                                dependencyNode.appendNode('version', dependency.version)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        repositories {
+            // The repository to publish to, Sonatype/MavenCentral
+            maven {
+                allowInsecureProtocol = true
+//                def releasesRepoUrl = RELEASE_REPOSITORY_URL
+//                def snapshotsRepoUrl = SNAPSHOT_REPOSITORY_URL
+//                url = DOKIT_VERSION.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+                url = SNAPSHOT_REPOSITORY_URL
+                credentials {
+                    username USERNAME
+                    password PASSWORD
+                }
+
+            }
+        }
+    }
+}
